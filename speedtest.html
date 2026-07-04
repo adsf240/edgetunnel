@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>CF 优选测速 - IP SpeedTest</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh;padding:16px;max-width:640px;margin:0 auto}
+h1{color:#58a6ff;font-size:22px;text-align:center;margin:8px 0 4px}
+.sub{text-align:center;color:#8b949e;font-size:12px;margin-bottom:16px}
+
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin:12px 0}
+.card h3{color:#58a6ff;font-size:15px;margin-bottom:12px}
+
+/* Country checkboxes */
+.countries{display:flex;flex-wrap:wrap;gap:8px}
+.countries label{display:flex;align-items:center;gap:6px;background:#21262d;border:1px solid #30363d;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:14px;transition:.2s}
+.countries label:hover{border-color:#58a6ff}
+.countries input:checked+span{color:#58a6ff;font-weight:600}
+.countries label:has(input:checked){border-color:#58a6ff;background:#1a2332}
+.countries input{accent-color:#58a6ff;width:16px;height:16px}
+
+/* Controls */
+.controls{display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.controls label{font-size:13px;color:#8b949e}
+.controls select,.controls input{background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:6px 10px;font-size:14px}
+.controls select{min-width:120px}
+
+.btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;transition:.2s;margin-top:12px}
+.btn-start{background:#238636;color:#fff}
+.btn-start:hover{background:#2ea043}
+.btn-start:disabled{background:#21262d;color:#484f58;cursor:not-allowed}
+
+/* Progress */
+.progress{display:none;margin:12px 0}
+.progress.show{display:block}
+.progress-bar{height:6px;background:#21262d;border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:#58a6ff;border-radius:3px;width:0;transition:width .3s}
+.progress-text{text-align:center;font-size:13px;color:#8b949e;margin-top:6px}
+
+/* Results table */
+.table-wrap{overflow-x:auto;margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 6px;color:#8b949e;font-weight:500;font-size:12px;border-bottom:1px solid #21262d}
+td{padding:10px 6px;border-bottom:1px solid #21262d}
+tr:hover td{background:#1a2332}
+.lat-good{color:#3fb950;font-weight:700}
+.lat-ok{color:#d2991d}
+.lat-bad{color:#f85149}
+.speed{font-weight:600}
+.copy-btn{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer}
+.copy-btn:hover{background:#30363d}
+.copy-btn.copied{background:#238636;border-color:#238636;color:#fff}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#238636;color:#fff;padding:10px 24px;border-radius:8px;font-size:14px;z-index:99;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
+
+.footer{text-align:center;color:#484f58;font-size:11px;margin:24px 0}
+a{color:#58a6ff;text-decoration:none}
+
+/* No results */
+.empty{text-align:center;padding:40px 20px;color:#8b949e;display:none}
+.empty.show{display:block}
+
+/* Loading dots */
+@keyframes dots{0%,20%{opacity:0}50%{opacity:1}100%{opacity:0}}
+.dots span{animation:dots 1.4s infinite;font-size:24px}
+.dots span:nth-child(2){animation-delay:.2s}
+.dots span:nth-child(3){animation-delay:.4s}
+</style>
+</head>
+<body>
+
+<h1>🌐 Cloudflare 优选测速</h1>
+<p class="sub">CDN 边缘 IP 延迟 + 速度实测 · 一键生成 VLESS 节点</p>
+
+<!-- Country Selection -->
+<div class="card">
+  <h3>📍 选择地区（可多选）</h3>
+  <div class="countries" id="countries">
+    <label><input type="checkbox" value="JP" checked><span>🇯🇵 日本</span></label>
+    <label><input type="checkbox" value="SG" checked><span>🇸🇬 新加坡</span></label>
+    <label><input type="checkbox" value="US-W" checked><span>🇺🇸 美西</span></label>
+    <label><input type="checkbox" value="US-C"><span>🇺🇸 美中</span></label>
+    <label><input type="checkbox" value="EU"><span>🇪🇺 欧洲</span></label>
+    <label><input type="checkbox" value="US-E"><span>🇺🇸 美东</span></label>
+  </div>
+  <div class="controls">
+    <label>最低速度</label>
+    <select id="minSpeed">
+      <option value="0">不限</option>
+      <option value="100">100 kbps</option>
+      <option value="500">500 kbps</option>
+      <option value="1000">1 Mbps</option>
+      <option value="5000">5 Mbps</option>
+    </select>
+    <label>显示数量</label>
+    <select id="limit">
+      <option value="10">10 个</option>
+      <option value="15" selected>15 个</option>
+      <option value="20">20 个</option>
+    </select>
+  </div>
+  <button class="btn btn-start" id="startBtn" onclick="startTest()">🚀 开始测速</button>
+</div>
+
+<!-- Progress -->
+<div class="progress" id="progress">
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  <div class="progress-text" id="progressText">准备中...</div>
+</div>
+
+<!-- No Results -->
+<div class="empty" id="empty">
+  <p>😕 没有符合条件的 IP</p>
+  <p style="font-size:12px;margin-top:8px">尝试放宽地区选择或降低速度要求</p>
+</div>
+
+<!-- Results -->
+<div class="card" id="resultsCard" style="display:none">
+  <h3>📊 测速结果 <span id="resultTime" style="font-size:11px;color:#8b949e;font-weight:400"></span></h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>地区</th><th>IP 地址</th><th>延迟</th><th>速度</th><th>操作</th></tr>
+      </thead>
+      <tbody id="resultBody"></tbody>
+    </table>
+  </div>
+  <button class="btn btn-start" style="background:#1f6feb;margin-top:16px" onclick="copyAll()">📋 复制全部 VLESS 链接</button>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="footer">数据实时测试 · 每 5 分钟可刷新 · <a href="/ADMIN">返回后台</a></div>
+
+<script>
+const API = '/api/speedtest';
+const DOMAIN = 'node.xuf.ccwu.cc';
+const UUID = 'b8f1ea10-178b-49eb-a48d-17b8c9680f4e';
+
+let results = [];
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+async function startTest() {
+  const btn = document.getElementById('startBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 测速中...';
+  
+  document.getElementById('empty').classList.remove('show');
+  document.getElementById('resultsCard').style.display = 'none';
+  
+  const progress = document.getElementById('progress');
+  progress.classList.add('show');
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('progressText').textContent = '正在生成 IP 池...';
+  
+  // Get selected countries
+  const countries = [...document.querySelectorAll('#countries input:checked')].map(c => c.value).join(',');
+  const minSpeed = document.getElementById('minSpeed').value;
+  const limit = document.getElementById('limit').value;
+  
+  // Animate progress
+  let p = 0;
+  const progressInterval = setInterval(() => {
+    p += Math.random() * 8;
+    if (p > 90) p = 90;
+    document.getElementById('progressFill').style.width = p + '%';
+    if (p < 30) document.getElementById('progressText').textContent = 'TCP 延迟测试中...';
+    else if (p < 70) document.getElementById('progressText').textContent = '带宽测试中...';
+    else document.getElementById('progressText').textContent = '生成结果...';
+  }, 500);
+  
+  try {
+    const resp = await fetch(`${API}?countries=${countries}&minSpeed=${minSpeed}&limit=${limit}`);
+    const data = await resp.json();
+    
+    clearInterval(progressInterval);
+    document.getElementById('progressFill').style.width = '100%';
+    document.getElementById('progressText').textContent = `完成！找到 ${data.count} 个节点`;
+    
+    results = data.nodes || [];
+    
+    setTimeout(() => {
+      progress.classList.remove('show');
+      if (results.length === 0) {
+        document.getElementById('empty').classList.add('show');
+      } else {
+        renderResults();
+      }
+      btn.disabled = false;
+      btn.textContent = '🔄 重新测速';
+    }, 600);
+    
+  } catch(e) {
+    clearInterval(progressInterval);
+    progress.classList.remove('show');
+    document.getElementById('progressText').textContent = '测速失败: ' + e.message;
+    btn.disabled = false;
+    btn.textContent = '🔄 重试';
+    toast('测速失败，请重试');
+  }
+}
+
+function latencyClass(ms) {
+  if (ms < 80) return 'lat-good';
+  if (ms < 180) return 'lat-ok';
+  return 'lat-bad';
+}
+
+function speedText(kbps) {
+  if (kbps >= 1000) return (kbps/1000).toFixed(1) + ' Mbps';
+  if (kbps > 0) return kbps + ' kbps';
+  return '--';
+}
+
+function makeLink(ip, lat) {
+  const label = `CF-${lat}ms`;
+  return `vless://${UUID}@${ip}:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F%3Fed%3D2048#${label}`;
+}
+
+function renderResults() {
+  document.getElementById('resultsCard').style.display = 'block';
+  document.getElementById('resultTime').textContent = new Date().toLocaleTimeString();
+  
+  const tbody = document.getElementById('resultBody');
+  tbody.innerHTML = results.map((r, i) => `
+    <tr>
+      <td>${r.country_name}</td>
+      <td><code style="font-size:12px">${r.ip}</code></td>
+      <td class="${latencyClass(r.latency_ms)}">${r.latency_ms}ms</td>
+      <td class="speed">${speedText(r.speed_kbps)}</td>
+      <td><button class="copy-btn" onclick="copyNode(${i},this)">复制链接</button></td>
+    </tr>
+  `).join('');
+}
+
+function copyNode(i, btn) {
+  const r = results[i];
+  const link = makeLink(r.ip, r.latency_ms);
+  navigator.clipboard.writeText(link).then(() => {
+    btn.textContent = '已复制!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '复制链接'; btn.classList.remove('copied'); }, 1500);
+  });
+  toast('VLESS 链接已复制');
+}
+
+function copyAll() {
+  const links = results.map(r => makeLink(r.ip, r.latency_ms)).join('\n');
+  navigator.clipboard.writeText(links).then(() => toast('全部 ' + results.length + ' 个链接已复制'));
+}
+
+// Initial auto-test on page load
+window.addEventListener('DOMContentLoaded', () => {
+  // Auto-start with a small delay
+  setTimeout(startTest, 1000);
+});
+</script>
+</body>
+</html>
